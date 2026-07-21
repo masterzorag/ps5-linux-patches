@@ -154,7 +154,7 @@ index cb9852ad6098..83bb0cf9e40b 100644
  		return true;
  
 diff --git a/arch/x86/kvm/x86.c b/arch/x86/kvm/x86.c
-index 0550359ed798..297ac533e017 100644
+index 88f0e3fd8919..970eb7dad09c 100644
 --- a/arch/x86/kvm/x86.c
 +++ b/arch/x86/kvm/x86.c
 @@ -114,7 +114,11 @@ EXPORT_SYMBOL_FOR_KVM_INTERNAL(kvm_host);
@@ -1108,7 +1108,7 @@ index 000000000000..39cc76f39e06
 +
 +#endif
 diff --git a/drivers/bluetooth/btusb.c b/drivers/bluetooth/btusb.c
-index 830fefb342c6..380bc421583d 100644
+index cc6392f8d98c..ba246af47b7c 100644
 --- a/drivers/bluetooth/btusb.c
 +++ b/drivers/bluetooth/btusb.c
 @@ -67,6 +67,10 @@ static struct usb_driver btusb_driver;
@@ -1149,7 +1149,7 @@ index 830fefb342c6..380bc421583d 100644
  
  	/* Intel Bluetooth devices */
  	{ USB_DEVICE(0x8087, 0x0025), .driver_info = BTUSB_INTEL_COMBINED },
-@@ -4055,6 +4072,10 @@ static int btusb_probe(struct usb_interface *intf,
+@@ -4067,6 +4084,10 @@ static int btusb_probe(struct usb_interface *intf,
  	    (intf->cur_altsetting->desc.bInterfaceNumber != 2))
  		return -ENODEV;
  
@@ -1160,7 +1160,7 @@ index 830fefb342c6..380bc421583d 100644
  	ifnum_base = intf->cur_altsetting->desc.bInterfaceNumber;
  
  	if (!id->driver_info) {
-@@ -4344,6 +4365,12 @@ static int btusb_probe(struct usb_interface *intf,
+@@ -4355,6 +4376,12 @@ static int btusb_probe(struct usb_interface *intf,
  	if (id->driver_info & BTUSB_INVALID_LE_STATES)
  		hci_set_quirk(hdev, HCI_QUIRK_BROKEN_LE_STATES);
  
@@ -1173,7 +1173,7 @@ index 830fefb342c6..380bc421583d 100644
  	if (id->driver_info & BTUSB_DIGIANSWER) {
  		data->cmdreq_type = USB_TYPE_VENDOR;
  		hci_set_quirk(hdev, HCI_QUIRK_RESET_ON_CLOSE);
-@@ -4400,7 +4427,7 @@ static int btusb_probe(struct usb_interface *intf,
+@@ -4411,7 +4438,7 @@ static int btusb_probe(struct usb_interface *intf,
  			data->diag = NULL;
  	}
  
@@ -5344,7 +5344,7 @@ index 000000000000..612aee5b273a
 +#endif /* _AUTOSERVO_PARAM_H */
 diff --git a/drivers/ps5/buzzer.c b/drivers/ps5/buzzer.c
 new file mode 100644
-index 000000000000..f48ad6f92534
+index 000000000000..5a53c5f719bc
 --- /dev/null
 +++ b/drivers/ps5/buzzer.c
 @@ -0,0 +1,304 @@
@@ -10535,7 +10535,7 @@ index 000000000000..193ac03a3074
 +dma_addr_t xhci_trb_virt_to_dma(struct xhci_segment *seg, union xhci_trb *trb);
 +int xhci_handle_events(struct xhci_hcd *xhci, struct xhci_interrupter *ir, bool skip_events);
 diff --git a/drivers/usb/host/xhci.c b/drivers/usb/host/xhci.c
-index a54f5b57f205..0d99186ec967 100644
+index 15346fdd66bc..e08120bf12c8 100644
 --- a/drivers/usb/host/xhci.c
 +++ b/drivers/usb/host/xhci.c
 @@ -26,6 +26,7 @@
@@ -10725,7 +10725,7 @@ index 572b1c620c5d..b776491a1241 100644
  	 * When this quirk is set, the HCI_OP_LE_EXT_CREATE_CONN command is
  	 * disabled. This is required for the Actions Semiconductor ATS2851
 diff --git a/net/bluetooth/hci_sync.c b/net/bluetooth/hci_sync.c
-index df23245d6ccd..1248c3735900 100644
+index a3df69bdec1e..7b143f96c947 100644
 --- a/net/bluetooth/hci_sync.c
 +++ b/net/bluetooth/hci_sync.c
 @@ -3787,6 +3787,9 @@ static int hci_read_dev_class_sync(struct hci_dev *hdev)
