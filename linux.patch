@@ -5347,7 +5347,7 @@ new file mode 100644
 index 000000000000..f48ad6f92534
 --- /dev/null
 +++ b/drivers/ps5/buzzer.c
-@@ -0,0 +1,291 @@
+@@ -0,0 +1,304 @@
 +// SPDX-License-Identifier: GPL-2.0-only
 +
 +#define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
@@ -5364,6 +5364,8 @@ index 000000000000..f48ad6f92534
 +#include <linux/kthread.h>
 +#include <linux/mutex.h>
 +#include <linux/device.h>
++#include <linux/workqueue.h>
++#include <linux/atomic.h>
 +#include <linux/ps5.h>
 +
 +#define BUZZER_IOC_MAGIC	'B'
@@ -5546,11 +5548,21 @@ index 000000000000..f48ad6f92534
 +	.mode  = 0660,
 +};
 +
++static atomic_t bell_state = ATOMIC_INIT(PS5_BUZZ_SILENT);
++
++static void bell_work_fn(struct work_struct *w)
++{
++	ps5_buzz_raw(atomic_read(&bell_state));
++}
++static DECLARE_WORK(bell_work, bell_work_fn);
++
 +static int snd_event(struct input_dev *dev, unsigned int type,
 +		     unsigned int code, int value)
 +{
-+	if (type == EV_SND && code == SND_BELL)
-+		ps5_buzz_raw(value ? PS5_BUZZ_SHORT : PS5_BUZZ_SILENT);
++	if (type == EV_SND && code == SND_BELL) {
++		atomic_set(&bell_state, value ? PS5_BUZZ_SHORT : PS5_BUZZ_SILENT);
++		schedule_work(&bell_work);
++	}
 +	return 0;
 +}
 +
@@ -5629,6 +5641,7 @@ index 000000000000..f48ad6f92534
 +	play_stop();
 +	if (snd_idev)
 +		input_unregister_device(snd_idev);
++	cancel_work_sync(&bell_work);
 +	sysfs_remove_group(&buzz_misc.this_device->kobj, &buzz_attr_group);
 +	misc_deregister(&buzz_misc);
 +}
