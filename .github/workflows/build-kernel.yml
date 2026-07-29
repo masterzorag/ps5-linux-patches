@@ -21,7 +21,7 @@ on:
 jobs:
   build:
     runs-on: self-hosted
-    timeout-minutes: 120
+    timeout-minutes: 720
     permissions:
       contents: write
 
