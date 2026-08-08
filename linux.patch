@@ -1108,7 +1108,7 @@ index 000000000000..39cc76f39e06
 +
 +#endif
 diff --git a/drivers/bluetooth/btusb.c b/drivers/bluetooth/btusb.c
-index cc6392f8d98c..ba246af47b7c 100644
+index 7f66e7c6e77a..b1b37fe6826c 100644
 --- a/drivers/bluetooth/btusb.c
 +++ b/drivers/bluetooth/btusb.c
 @@ -67,6 +67,10 @@ static struct usb_driver btusb_driver;
@@ -1149,7 +1149,7 @@ index cc6392f8d98c..ba246af47b7c 100644
  
  	/* Intel Bluetooth devices */
  	{ USB_DEVICE(0x8087, 0x0025), .driver_info = BTUSB_INTEL_COMBINED },
-@@ -4067,6 +4084,10 @@ static int btusb_probe(struct usb_interface *intf,
+@@ -4069,6 +4086,10 @@ static int btusb_probe(struct usb_interface *intf,
  	    (intf->cur_altsetting->desc.bInterfaceNumber != 2))
  		return -ENODEV;
  
@@ -1160,7 +1160,7 @@ index cc6392f8d98c..ba246af47b7c 100644
  	ifnum_base = intf->cur_altsetting->desc.bInterfaceNumber;
  
  	if (!id->driver_info) {
-@@ -4355,6 +4376,12 @@ static int btusb_probe(struct usb_interface *intf,
+@@ -4357,6 +4378,12 @@ static int btusb_probe(struct usb_interface *intf,
  	if (id->driver_info & BTUSB_INVALID_LE_STATES)
  		hci_set_quirk(hdev, HCI_QUIRK_BROKEN_LE_STATES);
  
@@ -1173,7 +1173,7 @@ index cc6392f8d98c..ba246af47b7c 100644
  	if (id->driver_info & BTUSB_DIGIANSWER) {
  		data->cmdreq_type = USB_TYPE_VENDOR;
  		hci_set_quirk(hdev, HCI_QUIRK_RESET_ON_CLOSE);
-@@ -4411,7 +4438,7 @@ static int btusb_probe(struct usb_interface *intf,
+@@ -4413,7 +4440,7 @@ static int btusb_probe(struct usb_interface *intf,
  			data->diag = NULL;
  	}
  
@@ -1238,7 +1238,7 @@ index fd50da4c7b18..caf9cce37100 100644
  #define AMDGPU_SG_THRESHOLD			(256*1024*1024)
  #define AMDGPU_WAIT_IDLE_TIMEOUT_IN_MS	        3000
 diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_bios.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_bios.c
-index 35d04e69aec0..314ceaaaab9f 100644
+index af88cab07413..2ee1d77ae379 100644
 --- a/drivers/gpu/drm/amd/amdgpu/amdgpu_bios.c
 +++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_bios.c
 @@ -221,8 +221,14 @@ static bool amdgpu_read_bios_from_rom(struct amdgpu_device *adev)
@@ -1256,7 +1256,7 @@ index 35d04e69aec0..314ceaaaab9f 100644
  	void __iomem *bios;
  
  	adev->bios = NULL;
-@@ -436,6 +442,7 @@ static inline bool amdgpu_acpi_vfct_bios(struct amdgpu_device *adev)
+@@ -476,6 +482,7 @@ static inline bool amdgpu_acpi_vfct_bios(struct amdgpu_device *adev)
  
  static bool amdgpu_get_bios_apu(struct amdgpu_device *adev)
  {
@@ -1264,7 +1264,7 @@ index 35d04e69aec0..314ceaaaab9f 100644
  	if (amdgpu_acpi_vfct_bios(adev)) {
  		dev_info(adev->dev, "Fetched VBIOS from VFCT\n");
  		goto success;
-@@ -450,6 +457,7 @@ static bool amdgpu_get_bios_apu(struct amdgpu_device *adev)
+@@ -490,6 +497,7 @@ static bool amdgpu_get_bios_apu(struct amdgpu_device *adev)
  		dev_info(adev->dev, "Fetched VBIOS from ROM BAR\n");
  		goto success;
  	}
@@ -1273,10 +1273,10 @@ index 35d04e69aec0..314ceaaaab9f 100644
  	if (amdgpu_read_platform_bios(adev)) {
  		dev_info(adev->dev, "Fetched VBIOS from platform\n");
 diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_device.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_device.c
-index feab90e3efd1..4ebde822fca2 100644
+index 3fad14824d1e..44b7916cef43 100644
 --- a/drivers/gpu/drm/amd/amdgpu/amdgpu_device.c
 +++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_device.c
-@@ -1814,6 +1814,26 @@ static int amdgpu_device_parse_gpu_info_fw(struct amdgpu_device *adev)
+@@ -1824,6 +1824,26 @@ static int amdgpu_device_parse_gpu_info_fw(struct amdgpu_device *adev)
  	case CHIP_CYAN_SKILLFISH:
  		if (adev->discovery.bin)
  			return 0;
@@ -1366,7 +1366,7 @@ index 60debd543e44..3af3b36f4b60 100644
  	    (pdev->class >> 8) == PCI_CLASS_DISPLAY_OTHER) {
  		if (drm_firmware_drivers_only() && amdgpu_modeset == -1)
 diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_gfx.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_gfx.c
-index b8ca876694ff..02c04136f293 100644
+index 839bc93a941a..5a4c806b9f0c 100644
 --- a/drivers/gpu/drm/amd/amdgpu/amdgpu_gfx.c
 +++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_gfx.c
 @@ -2434,6 +2434,11 @@ void amdgpu_gfx_profile_ring_begin_use(struct amdgpu_ring *ring)
@@ -1420,7 +1420,7 @@ index 321310ba2c08..764da52902ac 100644
  	header = (const struct common_firmware_header *)
  		adev->sdma.instance[instance].fw->data;
 diff --git a/drivers/gpu/drm/amd/amdgpu/gfx_v10_0.c b/drivers/gpu/drm/amd/amdgpu/gfx_v10_0.c
-index 8b60299b73ef..7ecf928cae8e 100644
+index 8454edaf0225..b9a4f7b15d52 100644
 --- a/drivers/gpu/drm/amd/amdgpu/gfx_v10_0.c
 +++ b/drivers/gpu/drm/amd/amdgpu/gfx_v10_0.c
 @@ -4202,6 +4202,14 @@ static void gfx_v10_0_check_gfxoff_flag(struct amdgpu_device *adev)
@@ -1498,7 +1498,7 @@ index 8b60299b73ef..7ecf928cae8e 100644
  		amdgpu_gfx_cp_init_microcode(adev, AMDGPU_UCODE_ID_CP_MEC2);
  		amdgpu_gfx_cp_init_microcode(adev, AMDGPU_UCODE_ID_CP_MEC2_JT);
  	} else {
-@@ -10104,6 +10130,21 @@ static u32 gfx_v10_0_get_cu_active_bitmap_per_sh(struct amdgpu_device *adev)
+@@ -10110,6 +10136,21 @@ static u32 gfx_v10_0_get_cu_active_bitmap_per_sh(struct amdgpu_device *adev)
  	return cu_active_bitmap;
  }
  
@@ -1520,7 +1520,7 @@ index 8b60299b73ef..7ecf928cae8e 100644
  static int gfx_v10_0_get_cu_info(struct amdgpu_device *adev,
  				 struct amdgpu_cu_info *cu_info)
  {
-@@ -10117,6 +10158,43 @@ static int gfx_v10_0_get_cu_info(struct amdgpu_device *adev,
+@@ -10123,6 +10164,43 @@ static int gfx_v10_0_get_cu_info(struct amdgpu_device *adev,
  	amdgpu_gfx_parse_disable_cu(adev, disable_masks, 4, 2);
  
  	mutex_lock(&adev->grbm_idx_mutex);
@@ -1580,7 +1580,7 @@ index 7ce1a1b95606..0bef516616ee 100644
  	case IP_VERSION(10, 3, 6):
  		adev->cg_flags = AMD_CG_SUPPORT_GFX_MGCG |
 diff --git a/drivers/gpu/drm/amd/amdgpu/sdma_v5_0.c b/drivers/gpu/drm/amd/amdgpu/sdma_v5_0.c
-index 52f4e9e099cb..6e4ff7444536 100644
+index 00b51fae2d8d..1b193bfaffbb 100644
 --- a/drivers/gpu/drm/amd/amdgpu/sdma_v5_0.c
 +++ b/drivers/gpu/drm/amd/amdgpu/sdma_v5_0.c
 @@ -1368,6 +1368,12 @@ static int sdma_v5_0_early_init(struct amdgpu_ip_block *ip_block)
@@ -1597,7 +1597,7 @@ index 52f4e9e099cb..6e4ff7444536 100644
  	if (r)
  		return r;
 diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c
-index f8c13bad4ac2..1a9cccc5fa5c 100644
+index 93cd70183c18..628843d84ebb 100644
 --- a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c
 +++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c
 @@ -80,6 +80,10 @@
@@ -1611,7 +1611,7 @@ index f8c13bad4ac2..1a9cccc5fa5c 100644
  #include <drm/drm_privacy_screen_consumer.h>
  #include <drm/display/drm_dp_mst_helper.h>
  #include <drm/display/drm_hdmi_helper.h>
-@@ -3093,7 +3097,10 @@ static int dm_hw_init(struct amdgpu_ip_block *ip_block)
+@@ -3137,7 +3141,10 @@ static int dm_hw_init(struct amdgpu_ip_block *ip_block)
  	r = amdgpu_dm_init(adev);
  	if (r)
  		return r;
@@ -1622,7 +1622,7 @@ index f8c13bad4ac2..1a9cccc5fa5c 100644
  
  	r = dm_oem_i2c_hw_init(adev);
  	if (r)
-@@ -3114,7 +3121,10 @@ static int dm_hw_fini(struct amdgpu_ip_block *ip_block)
+@@ -3158,7 +3165,10 @@ static int dm_hw_fini(struct amdgpu_ip_block *ip_block)
  {
  	struct amdgpu_device *adev = ip_block->adev;
  
@@ -1633,7 +1633,7 @@ index f8c13bad4ac2..1a9cccc5fa5c 100644
  
  	amdgpu_dm_irq_fini(adev);
  	amdgpu_dm_fini(adev);
-@@ -6880,6 +6890,12 @@ static void fill_stream_properties_from_drm_display_mode(
+@@ -6884,6 +6894,12 @@ static void fill_stream_properties_from_drm_display_mode(
  
  	stream->output_color_space = get_output_color_space(timing_out, connector_state);
  	stream->content_type = get_output_content_type(connector_state);
@@ -1646,7 +1646,7 @@ index f8c13bad4ac2..1a9cccc5fa5c 100644
  }
  
  static void fill_audio_info(struct audio_info *audio_info,
-@@ -8269,6 +8285,11 @@ enum drm_mode_status amdgpu_dm_connector_mode_valid(struct drm_connector *connec
+@@ -8273,6 +8289,11 @@ enum drm_mode_status amdgpu_dm_connector_mode_valid(struct drm_connector *connec
  	 */
  	struct amdgpu_dm_connector *aconnector = to_amdgpu_dm_connector(connector);
  
@@ -1658,7 +1658,7 @@ index f8c13bad4ac2..1a9cccc5fa5c 100644
  	if ((mode->flags & DRM_MODE_FLAG_INTERLACE) ||
  			(mode->flags & DRM_MODE_FLAG_DBLSCAN))
  		return result;
-@@ -10957,12 +10978,64 @@ static void amdgpu_dm_atomic_commit_tail(struct drm_atomic_state *state)
+@@ -10993,12 +11014,64 @@ static void amdgpu_dm_atomic_commit_tail(struct drm_atomic_state *state)
  	drm_atomic_helper_update_legacy_modeset_state(dev, state);
  	drm_dp_mst_atomic_wait_for_dependencies(state);
  
@@ -1810,10 +1810,10 @@ index 9459e8f28338..063e4a4eefdd 100644
  	.fec_is_active = enc2_fec_is_active,
  	.is_in_alt_mode = dcn201_link_encoder_is_in_alt_mode,
 diff --git a/drivers/gpu/drm/amd/display/dc/link/protocols/link_dp_capability.c b/drivers/gpu/drm/amd/display/dc/link/protocols/link_dp_capability.c
-index 782a45caa13d..444259795140 100644
+index fe8420b803ee..f09f90f0155e 100644
 --- a/drivers/gpu/drm/amd/display/dc/link/protocols/link_dp_capability.c
 +++ b/drivers/gpu/drm/amd/display/dc/link/protocols/link_dp_capability.c
-@@ -1018,6 +1018,12 @@ bool link_decide_link_settings(struct dc_stream_state *stream,
+@@ -1020,6 +1020,12 @@ bool link_decide_link_settings(struct dc_stream_state *stream,
  		decide_dp_link_settings(link, link_setting, req_bw);
  	}
  
@@ -1826,7 +1826,7 @@ index 782a45caa13d..444259795140 100644
  	return link_setting->lane_count != LANE_COUNT_UNKNOWN &&
  			link_setting->link_rate != LINK_RATE_UNKNOWN;
  }
-@@ -1458,6 +1464,8 @@ void dpcd_set_source_specific_data(struct dc_link *link)
+@@ -1460,6 +1466,8 @@ void dpcd_set_source_specific_data(struct dc_link *link)
  				(uint8_t *)(&amd_device_id),
  				sizeof(amd_device_id));
  
@@ -1835,7 +1835,7 @@ index 782a45caa13d..444259795140 100644
  		if (link->ctx->dce_version >= DCN_VERSION_2_0 &&
  			link->dc->caps.min_horizontal_blanking_period != 0) {
  
-@@ -1467,6 +1475,7 @@ void dpcd_set_source_specific_data(struct dc_link *link)
+@@ -1469,6 +1477,7 @@ void dpcd_set_source_specific_data(struct dc_link *link)
  				DP_SOURCE_MINIMUM_HBLANK_SUPPORTED, (uint8_t *)(&hblank_size),
  				sizeof(hblank_size));
  		}
@@ -1856,7 +1856,7 @@ index 92510af1bd65..85c9e587834d 100644
  #define FAMILY_VGH 144
  #define DEVICE_ID_VGH_163F 0x163F
 diff --git a/drivers/gpu/drm/drm_edid.c b/drivers/gpu/drm/drm_edid.c
-index 404208bf23a6..85718d593c42 100644
+index df3c25bac761..8b0b85931945 100644
 --- a/drivers/gpu/drm/drm_edid.c
 +++ b/drivers/gpu/drm/drm_edid.c
 @@ -2242,6 +2242,10 @@ static void connector_bad_edid(struct drm_connector *connector,
@@ -1895,10 +1895,10 @@ index a5d8f45b7881..3c7b76af13e4 100644
  		case 0x68:	/* Lucienne */
  		case 0x71:	/* Zen2 */
 diff --git a/drivers/iommu/amd/init.c b/drivers/iommu/amd/init.c
-index 3bdb380d23e9..e25db11bb1e5 100644
+index 0df711c082cb..17892213f622 100644
 --- a/drivers/iommu/amd/init.c
 +++ b/drivers/iommu/amd/init.c
-@@ -3107,6 +3107,8 @@ static void __init free_iommu_resources(void)
+@@ -3106,6 +3106,8 @@ static void __init free_iommu_resources(void)
  	free_pci_segments();
  }
  
@@ -1907,7 +1907,7 @@ index 3bdb380d23e9..e25db11bb1e5 100644
  /* SB IOAPIC is always on this device in AMD systems */
  #define IOAPIC_SB_DEVID		((0x00 << 8) | PCI_DEVFN(0x14, 0))
  
-@@ -3159,6 +3161,8 @@ static bool __init check_ioapic_information(void)
+@@ -3158,6 +3160,8 @@ static bool __init check_ioapic_information(void)
  	return ret;
  }
  
@@ -1916,7 +1916,7 @@ index 3bdb380d23e9..e25db11bb1e5 100644
  static void __init free_dma_resources(void)
  {
  	amd_iommu_pdom_id_destroy();
-@@ -3283,8 +3287,11 @@ static int __init early_amd_iommu_init(void)
+@@ -3282,8 +3286,11 @@ static int __init early_amd_iommu_init(void)
  	if (!is_kdump_kernel() || amd_iommu_disabled)
  		disable_iommus();
  
@@ -9860,7 +9860,7 @@ index a07e7ba9cd53..4c020957b7a7 100644
  obj-$(CONFIG_USB_XHCI_PLATFORM) += xhci-plat-hcd.o
  obj-$(CONFIG_USB_XHCI_HISTB)	+= xhci-histb.o
 diff --git a/drivers/usb/host/xhci-pci.c b/drivers/usb/host/xhci-pci.c
-index 585b2f3117b0..16d5e2178ae0 100644
+index b0377701a940..0685bc57e489 100644
 --- a/drivers/usb/host/xhci-pci.c
 +++ b/drivers/usb/host/xhci-pci.c
 @@ -18,6 +18,7 @@
@@ -9881,7 +9881,7 @@ index 585b2f3117b0..16d5e2178ae0 100644
  static const char hcd_name[] = "xhci_hcd";
  
  static struct hc_driver __read_mostly xhci_pci_hc_driver;
-@@ -511,6 +515,13 @@ static void xhci_pci_quirks(struct device *dev, struct xhci_hcd *xhci)
+@@ -512,6 +516,13 @@ static void xhci_pci_quirks(struct device *dev, struct xhci_hcd *xhci)
  	if (xhci->hci_version >= 0x120)
  		xhci->quirks |= XHCI_DEFAULT_PM_RUNTIME_ALLOW;
  
@@ -9895,7 +9895,7 @@ index 585b2f3117b0..16d5e2178ae0 100644
  	if (xhci->quirks & XHCI_RESET_ON_RESUME)
  		xhci_dbg_trace(xhci, trace_xhci_dbg_quirks,
  				"QUIRK: Resetting on resume");
-@@ -575,6 +586,13 @@ static int xhci_pci_setup(struct usb_hcd *hcd)
+@@ -576,6 +587,13 @@ static int xhci_pci_setup(struct usb_hcd *hcd)
  	/* imod_interval is the interrupt moderation value in nanoseconds. */
  	xhci->imod_interval = 40000;
  
@@ -9909,7 +9909,7 @@ index 585b2f3117b0..16d5e2178ae0 100644
  	retval = xhci_gen_setup(hcd, xhci_pci_quirks);
  	if (retval)
  		return retval;
-@@ -713,6 +731,11 @@ void xhci_pci_remove(struct pci_dev *dev)
+@@ -714,6 +732,11 @@ void xhci_pci_remove(struct pci_dev *dev)
  	xhci = hcd_to_xhci(pci_get_drvdata(dev));
  	set_power_d3 = xhci->quirks & XHCI_SPURIOUS_WAKEUP;
  
@@ -9921,7 +9921,7 @@ index 585b2f3117b0..16d5e2178ae0 100644
  	xhci->xhc_state |= XHCI_STATE_REMOVING;
  
  	if (pci_choose_state(dev, PMSG_SUSPEND) == PCI_D0)
-@@ -945,6 +968,7 @@ static const struct pci_device_id pci_ids[] = {
+@@ -946,6 +969,7 @@ static const struct pci_device_id pci_ids[] = {
  	/* handle any USB 3.0 xHCI controller */
  	{ PCI_DEVICE_CLASS(PCI_CLASS_SERIAL_USB_XHCI, ~0),
  	},
@@ -10535,7 +10535,7 @@ index 000000000000..193ac03a3074
 +dma_addr_t xhci_trb_virt_to_dma(struct xhci_segment *seg, union xhci_trb *trb);
 +int xhci_handle_events(struct xhci_hcd *xhci, struct xhci_interrupter *ir, bool skip_events);
 diff --git a/drivers/usb/host/xhci.c b/drivers/usb/host/xhci.c
-index 15346fdd66bc..e08120bf12c8 100644
+index 5b15eae233d3..5849be668eec 100644
 --- a/drivers/usb/host/xhci.c
 +++ b/drivers/usb/host/xhci.c
 @@ -26,6 +26,7 @@
@@ -10569,10 +10569,10 @@ index 15346fdd66bc..e08120bf12c8 100644
  }
  
 diff --git a/drivers/usb/host/xhci.h b/drivers/usb/host/xhci.h
-index aeecd301f207..e202fbdd2f41 100644
+index d0f14fc23245..589862f5ead6 100644
 --- a/drivers/usb/host/xhci.h
 +++ b/drivers/usb/host/xhci.h
-@@ -1645,6 +1645,7 @@ struct xhci_hcd {
+@@ -1646,6 +1646,7 @@ struct xhci_hcd {
  #define XHCI_CDNS_SCTX_QUIRK	BIT_ULL(48)
  #define XHCI_ETRON_HOST	BIT_ULL(49)
  #define XHCI_LIMIT_ENDPOINT_INTERVAL_9 BIT_ULL(50)
@@ -10698,7 +10698,7 @@ index 000000000000..75a2d6dace5d
 +
 +#endif /* _LINUX_PS5_H */
 diff --git a/include/net/bluetooth/hci.h b/include/net/bluetooth/hci.h
-index 572b1c620c5d..b776491a1241 100644
+index f5cf13b44342..454abda37952 100644
 --- a/include/net/bluetooth/hci.h
 +++ b/include/net/bluetooth/hci.h
 @@ -309,6 +309,22 @@ enum {
@@ -10725,10 +10725,10 @@ index 572b1c620c5d..b776491a1241 100644
  	 * When this quirk is set, the HCI_OP_LE_EXT_CREATE_CONN command is
  	 * disabled. This is required for the Actions Semiconductor ATS2851
 diff --git a/net/bluetooth/hci_sync.c b/net/bluetooth/hci_sync.c
-index a3df69bdec1e..7b143f96c947 100644
+index 42bbffba2172..ccd77bf3fa04 100644
 --- a/net/bluetooth/hci_sync.c
 +++ b/net/bluetooth/hci_sync.c
-@@ -3787,6 +3787,9 @@ static int hci_read_dev_class_sync(struct hci_dev *hdev)
+@@ -3832,6 +3832,9 @@ static int hci_read_dev_class_sync(struct hci_dev *hdev)
  /* Read Local Name */
  static int hci_read_local_name_sync(struct hci_dev *hdev)
  {
@@ -10738,7 +10738,7 @@ index a3df69bdec1e..7b143f96c947 100644
  	return __hci_cmd_sync_status(hdev, HCI_OP_READ_LOCAL_NAME,
  				     0, NULL, HCI_CMD_TIMEOUT);
  }
-@@ -4874,6 +4877,12 @@ static int hci_le_set_default_phy_sync(struct hci_dev *hdev)
+@@ -4919,6 +4922,12 @@ static int hci_le_set_default_phy_sync(struct hci_dev *hdev)
  {
  	struct hci_cp_le_set_default_phy cp;
  
