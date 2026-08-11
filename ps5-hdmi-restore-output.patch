@@ -1,0 +1,276 @@
+ps5/hdmi: restore video output after an EDID notification
+
+The PS5's HDMI port is driven by a FLAVA3 transmitter behind an internal DP
+link. When the TV re-handshakes HDMI -- switched on, woken, or switched back to
+this input -- the ICC firmware sends an EDID notification and
+hdmi_notification_handler() calls sceHdmiOutputMode(), which reprograms the
+transmitter and leaves video muted.
+
+DRM is never told. There is no connector event and no atomic commit, so
+amdgpu_dm_atomic_commit_tail() does not run and nothing calls
+sceHdmiDeviceSetVideoMute(0). The GPU carries on scanning out a valid picture
+into a chip that discards it while still driving sync, so the TV reports a live
+signal and shows black. Every register the kernel can read is identical to a
+working display -- a fault capture diffed against a healthy baseline shows no
+meaningful difference -- because every transmitter call is a write-only I2C
+poke with no readback. Recovering needs a full modeset, which in practice means
+SSHing in.
+
+This is the "screen save does not work properly" entry in the
+ps5-linux-patches README: the console appears to have blanked and cannot be
+woken from the couch, but it is not a screensaver or a DPMS state at all.
+
+Restore the output from the handler instead, replaying the configuration
+amdgpu last programmed. This touches only the transmitter -- no modeset, no
+DRM involvement, no dependency on a compositor being alive -- so it works in
+Steam Game Mode (gamescope, which has no D-Bus API to force a modeset) and at
+the display-manager greeter alike.
+
+Because there is no readback, it cannot be determined statically whether an
+unmute alone suffices or whether the video timing must be reprogrammed too.
+The behaviour is therefore selectable at runtime via hdmi.restore_output:
+
+  0 - do nothing (pre-fix behaviour)
+  1 - unmute only (cheapest; does not retrain the internal DP link)
+  2 - replay the full video+audio config amdgpu last programmed (default)
+
+Also serialise the exported transmitter entry points. They all build their ICC
+message in the single global i2c_ctx with no locking; an EDID notification
+arriving while amdgpu is mid-commit could already interleave two message builds
+and send a malformed packet, and this change lengthens the handler's I2C
+activity enough to make that materially more likely.
+
+Not fixed here: hdmi_notification_handler() leaks the previous real_edid on
+every notification. Freeing it would risk a use-after-free, since amdgpu reads
+that pointer without any synchronisation against this path -- the leak is the
+safer of the two bugs and wants a separate fix.
+
+Tested on a PS5 (Oberon) running kernel 7.1.3 with a 4K TV over the internal
+DP -> FLAVA3 path, across several days of ordinary use. Before the patch, the
+blackout reproduced by powering the TV off and on, or by switching it to
+another input and back; after it, the same actions restore the picture within
+about a second and the handler logs:
+
+  hdmi: got real edid
+  hdmi: restored hdmi output (3840x2160, 8 ch)
+
+Early in boot, before amdgpu has committed a mode, there is nothing cached to
+replay and the handler falls back to unmuting alone, logging "(unmute only, no
+mode cached)".
+
+--- a/drivers/ps5/hdmi.c
++++ b/drivers/ps5/hdmi.c
+@@ -3,8 +3,10 @@
+ #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
+ 
+ #include <linux/module.h>
++#include <linux/mutex.h>
+ #include <linux/ps5.h>
+ #include <drm/drm_edid.h>
++#include <drm/drm_modes.h>
+ 
+ #define HDMI_IC_TYPE_FLAVA3	2
+ #define HDMI_IC_TYPE_VERDE	3
+@@ -102,6 +104,38 @@
+ 
+ static struct i2c_context i2c_ctx;
+ 
++/*
++ * Serialises the transmitter sequences below. They all build their ICC
++ * message in the single global i2c_ctx, so an EDID notification arriving
++ * while amdgpu is mid-commit would interleave two message builds and send a
++ * malformed packet.
++ *
++ * Only the exported sceHdmi* entry points and hdmiSystemResume() take this
++ * lock, and none of them calls another locked function, so it never nests.
++ */
++static DEFINE_MUTEX(hdmi_lock);
++
++/*
++ * Last video/audio configuration amdgpu programmed, replayed by
++ * hdmi_notification_handler() to bring the output back after the ICC
++ * firmware reprograms the transmitter behind DRM's back.
++ */
++static struct drm_display_mode last_mode;
++static bool last_mode_valid;
++static int last_channels = 2;
++
++/*
++ * How hdmi_notification_handler() restores output after an EDID
++ * notification:
++ *   0 - do nothing (pre-fix behaviour: the screen stays black)
++ *   1 - unmute only (cheapest, does not retrain the internal DP link)
++ *   2 - replay the full video+audio config amdgpu last programmed
++ */
++static int restore_output = 2;
++module_param(restore_output, int, 0644);
++MODULE_PARM_DESC(restore_output,
++	"Restore HDMI output after an EDID notification: 0=off, 1=unmute only, 2=full replay (default 2)");
++
+ static u8 hdmi_ic_type;
+ static u8 tmds_polarity;
+ static u8 tmds_ch_swap;
+@@ -522,6 +556,7 @@
+ 
+ void hdmiSystemResume(void)
+ {
++	mutex_lock(&hdmi_lock);
+ 	// sceSetBackToUnpluggedSequence();
+ 	// sceSetBackToWaitResolutionSequence();
+ 	if (hdmi_ic_type == HDMI_IC_TYPE_FLAVA3) {
+@@ -537,6 +572,7 @@
+ 		unk_akv();
+ 	}
+ 	sceControlHdmiEvent(1);
++	mutex_unlock(&hdmi_lock);
+ }
+ EXPORT_SYMBOL(hdmiSystemResume);
+ 
+@@ -1093,6 +1129,7 @@
+ 
+ void sceHdmiInitVideoConfig(void)
+ {
++	mutex_lock(&hdmi_lock);
+ 	stopHdcpHw();
+ 	if (hdmi_ic_type == HDMI_IC_TYPE_FLAVA3) {
+ 		sceDisableEncode();
+@@ -1102,21 +1139,27 @@
+ 	} else {
+ 		initVerde();
+ 	}
++	mutex_unlock(&hdmi_lock);
+ }
+ EXPORT_SYMBOL(sceHdmiInitVideoConfig);
+ 
+ void sceHdmiSetVideoConfig(const struct drm_display_mode *mode)
+ {
++	mutex_lock(&hdmi_lock);
++	drm_mode_copy(&last_mode, mode);
++	last_mode_valid = true;
+ 	if (hdmi_ic_type == HDMI_IC_TYPE_FLAVA3) {
+ 		setHdmiVideoConfigFlava3(mode);
+ 	} else {
+ 		setHdmiVideoConfigVerde(mode);
+ 	}
++	mutex_unlock(&hdmi_lock);
+ }
+ EXPORT_SYMBOL(sceHdmiSetVideoConfig);
+ 
+ void sceHdmiDeviceSetVideoMute(int mute)
+ {
++	mutex_lock(&hdmi_lock);
+ 	i2c_init(4);
+ 	if (hdmi_ic_type == HDMI_IC_TYPE_FLAVA3) {
+ 		i2c_write(0x705f, (mute == 1) << 7);
+@@ -1124,21 +1167,26 @@
+ 		i2c_mask(0x105, mute != 1, 0x03);
+ 	}
+ 	i2c_exec();
++	mutex_unlock(&hdmi_lock);
+ }
+ EXPORT_SYMBOL(sceHdmiDeviceSetVideoMute);
+ 
+ void sceHdmiSetAudioConfig(int channels)
+ {
++	mutex_lock(&hdmi_lock);
++	last_channels = channels;
+ 	if (hdmi_ic_type == HDMI_IC_TYPE_FLAVA3) {
+ 		sceHdmiSetAudioConfigFlava3(channels);
+ 	} else {
+ 		sceHdmiSetAudioConfigVerde(channels);
+ 	}
++	mutex_unlock(&hdmi_lock);
+ }
+ EXPORT_SYMBOL(sceHdmiSetAudioConfig);
+ 
+ void sceHdmiSetAudioMute(int mute)
+ {
++	mutex_lock(&hdmi_lock);
+ 	i2c_init(4);
+ 	if (hdmi_ic_type == HDMI_IC_TYPE_FLAVA3) {
+ 		i2c_mask(0x70a8, (mute == 1) << 2, 0x04);
+@@ -1146,16 +1194,19 @@
+ 		i2c_cmd_5_5(mute == 1);
+ 	}
+ 	i2c_exec();
++	mutex_unlock(&hdmi_lock);
+ }
+ EXPORT_SYMBOL(sceHdmiSetAudioMute);
+ 
+ void sceHdmiOutputMode(void)
+ {
++	mutex_lock(&hdmi_lock);
+ 	i2c_init(4);
+ 	if (hdmi_ic_type == HDMI_IC_TYPE_FLAVA3) {
+ 		i2c_write(0x7005, 0x80);
+ 	}
+ 	i2c_exec();
++	mutex_unlock(&hdmi_lock);
+ }
+ EXPORT_SYMBOL(sceHdmiOutputMode);
+ 
+@@ -1229,11 +1280,58 @@
+ 
+ void hdmi_notification_handler(struct icc_msg *msg)
+ {
+-		if (msg->data[1] == 0x02) {
+-			fix_edid(&msg->data[4]);
+-			real_edid = drm_edid_alloc(&msg->data[4], *(u16 *)&msg->data[2]);
+-			pr_info("got real edid\n");
+-			sceHdmiOutputMode();
+-		}
++	struct drm_display_mode mode = {};
++	bool have_mode;
++	int channels;
++
++	if (msg->data[1] != 0x02)
++		return;
++
++	fix_edid(&msg->data[4]);
++	real_edid = drm_edid_alloc(&msg->data[4], *(u16 *)&msg->data[2]);
++	pr_info("got real edid\n");
++	sceHdmiOutputMode();
++
++	/*
++	 * sceHdmiOutputMode() has just reprogrammed the transmitter, which
++	 * leaves video muted -- and DRM is never told. There is no connector
++	 * event and no atomic commit, so amdgpu_dm_atomic_commit_tail() does
++	 * not run and nothing calls sceHdmiDeviceSetVideoMute(0). The GPU
++	 * keeps scanning out a valid picture into a chip that discards it
++	 * while still driving sync, so the TV reports a live signal and shows
++	 * black until something forces a modeset.
++	 *
++	 * Restore the output here instead. This touches only the transmitter:
++	 * no modeset, no DRM involvement, and no dependency on a compositor
++	 * being alive -- so it works in Game Mode and at the greeter alike.
++	 */
++	if (restore_output <= 0)
++		return;
++
++	if (restore_output == 1) {
++		sceHdmiDeviceSetVideoMute(0);
++		pr_info("restored hdmi output (unmute only)\n");
++		return;
++	}
++
++	mutex_lock(&hdmi_lock);
++	have_mode = last_mode_valid;
++	if (have_mode)
++		drm_mode_copy(&mode, &last_mode);
++	channels = last_channels;
++	mutex_unlock(&hdmi_lock);
++
++	if (!have_mode) {
++		/* Nothing programmed yet (early boot): unmute is all we can do. */
++		sceHdmiDeviceSetVideoMute(0);
++		pr_info("restored hdmi output (unmute only, no mode cached)\n");
++		return;
++	}
++
++	sceHdmiSetVideoConfig(&mode);
++	sceHdmiDeviceSetVideoMute(0);
++	sceHdmiSetAudioConfig(channels);
++	sceHdmiSetAudioMute(0);
++	pr_info("restored hdmi output (%s, %d ch)\n", mode.name, channels);
+ }
+ EXPORT_SYMBOL(hdmi_notification_handler);
