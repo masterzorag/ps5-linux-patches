@@ -3405,6 +3405,22 @@ index 000000000000..91fedcca4589
 +
 +	return 0;
 +}
+diff --git a/drivers/pci/pci.c b/drivers/pci/pci.c
+index 77b17b13ee61..39d2cb85ca90 100644
+--- a/drivers/pci/pci.c
++++ b/drivers/pci/pci.c
+@@ -121,7 +121,11 @@ unsigned long pci_hotplug_bus_size = DEFAULT_HOTPLUG_BUS_SIZE;
+ 
+ 
+ /* PCIe MPS/MRRS strategy; can be overridden by kernel command-line param */
++#ifdef CONFIG_X86_PS5
++enum pcie_bus_config_types pcie_bus_config = PCIE_BUS_PERFORMANCE;
++#else
+ enum pcie_bus_config_types pcie_bus_config = PCIE_BUS_DEFAULT;
++#endif
+ 
+ /*
+  * The default CLS is used if arch didn't set CLS explicitly and not
 diff --git a/drivers/pci/probe.c b/drivers/pci/probe.c
 index dd0abbc63e18..0774427dce5a 100644
 --- a/drivers/pci/probe.c
@@ -9323,7 +9339,7 @@ index 000000000000..547b1457ac62
 +MODULE_LICENSE("GPL");
 diff --git a/drivers/ps5/svm.c b/drivers/ps5/svm.c
 new file mode 100644
-index 000000000000..b9e7def39ef7
+index 000000000000..ff1e43f79266
 --- /dev/null
 +++ b/drivers/ps5/svm.c
 @@ -0,0 +1,171 @@
@@ -9431,8 +9447,8 @@ index 000000000000..b9e7def39ef7
 +	save->rax = (u64)guest_func;
 +	save->rsp = (u64)guest_stack + PAGE_SIZE;
 +
-+	rdmsrl(MSR_EFER, save->efer);
-+	rdmsrl(MSR_IA32_CR_PAT, save->g_pat);
++	rdmsrq(MSR_EFER, save->efer);
++	rdmsrq(MSR_IA32_CR_PAT, save->g_pat);
 +
 +	__set_bit(INTERCEPT_VMRUN, (unsigned long *)ctrl->intercepts);
 +	__set_bit(INTERCEPT_VMMCALL, (unsigned long *)ctrl->intercepts);
@@ -9465,11 +9481,11 @@ index 000000000000..b9e7def39ef7
 +
 +	spin_lock_irqsave(&svm_execute_lock, flags);
 +
-+	rdmsrl(MSR_EFER, efer);
-+	wrmsrl(MSR_EFER, efer | EFER_SVME);
++	rdmsrq(MSR_EFER, efer);
++	wrmsrq(MSR_EFER, efer | EFER_SVME);
 +
-+	rdmsrl(MSR_VM_HSAVE_PA, hsave_pa);
-+	wrmsrl(MSR_VM_HSAVE_PA, virt_to_phys(hsave_area));
++	rdmsrq(MSR_VM_HSAVE_PA, hsave_pa);
++	wrmsrq(MSR_VM_HSAVE_PA, virt_to_phys(hsave_area));
 +
 +	svm_init_vmcb(vmcb, guest_func, guest_stack);
 +
@@ -9482,8 +9498,8 @@ index 000000000000..b9e7def39ef7
 +		pr_warn("svm: unexpected exit code 0x%llx\n", exit_code);
 +	}
 +
-+	wrmsrl(MSR_VM_HSAVE_PA, hsave_pa);
-+	wrmsrl(MSR_EFER, efer);
++	wrmsrq(MSR_VM_HSAVE_PA, hsave_pa);
++	wrmsrq(MSR_EFER, efer);
 +
 +	spin_unlock_irqrestore(&svm_execute_lock, flags);
 +
@@ -9860,7 +9876,7 @@ index 174580c1281a..87d0ec62b3d1 100644
  obj-$(CONFIG_USB_XHCI_PCI_RENESAS)	+= xhci-pci-renesas.o
  obj-$(CONFIG_USB_XHCI_PLATFORM) += xhci-plat-hcd.o
 diff --git a/drivers/usb/host/xhci-pci.c b/drivers/usb/host/xhci-pci.c
-index 6b3fcba44b08..557a7c884f9d 100644
+index 6b3fcba44b08..912c083afb20 100644
 --- a/drivers/usb/host/xhci-pci.c
 +++ b/drivers/usb/host/xhci-pci.c
 @@ -18,6 +18,7 @@
@@ -9895,21 +9911,23 @@ index 6b3fcba44b08..557a7c884f9d 100644
  	if (xhci->quirks & XHCI_RESET_ON_RESUME)
  		xhci_dbg_trace(xhci, trace_xhci_dbg_quirks,
  				"QUIRK: Resetting on resume");
-@@ -576,6 +587,13 @@ static int xhci_pci_setup(struct usb_hcd *hcd)
+@@ -576,6 +587,15 @@ static int xhci_pci_setup(struct usb_hcd *hcd)
  	/* imod_interval is the interrupt moderation value in nanoseconds. */
  	xhci->imod_interval = 40000;
  
++#if 0
 +    if (pdev->vendor == PCI_VENDOR_ID_SONY &&
 +		pdev->device == PCI_DEVICE_ID_PS5_SALINA_XHCI) {
 +		retval = xhci_salina_init(pdev);
 +		if (retval)
 +			return retval;
 +    }
++#endif
 +
  	retval = xhci_gen_setup(hcd, xhci_pci_quirks);
  	if (retval)
  		return retval;
-@@ -725,6 +743,11 @@ void xhci_pci_remove(struct pci_dev *dev)
+@@ -725,6 +745,11 @@ void xhci_pci_remove(struct pci_dev *dev)
  	xhci = hcd_to_xhci(pci_get_drvdata(dev));
  	set_power_d3 = xhci->quirks & XHCI_SPURIOUS_WAKEUP;
  
@@ -9921,7 +9939,7 @@ index 6b3fcba44b08..557a7c884f9d 100644
  	xhci->xhc_state |= XHCI_STATE_REMOVING;
  
  	if (pci_choose_state(dev, PMSG_SUSPEND) == PCI_D0)
-@@ -957,6 +980,7 @@ static const struct pci_device_id pci_ids[] = {
+@@ -957,6 +982,7 @@ static const struct pci_device_id pci_ids[] = {
  	/* handle any USB 3.0 xHCI controller */
  	{ PCI_DEVICE_CLASS(PCI_CLASS_SERIAL_USB_XHCI, ~0),
  	},

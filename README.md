@@ -17,8 +17,7 @@ make -j$(nproc)
 In the same `linux` folder after compilation, do:
 
 ```bash
-sudo make modules_install
-sudo make install
+sudo make modules_install && sudo make install
 ```
 
 ## TODO
