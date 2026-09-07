@@ -3,8 +3,8 @@ ps5/hdmi: restore video output after an EDID notification
 The PS5's HDMI port is driven by a FLAVA3 transmitter behind an internal DP
 link. When the TV re-handshakes HDMI -- switched on, woken, or switched back to
 this input -- the ICC firmware sends an EDID notification and
-hdmi_notification_handler() calls sceHdmiOutputMode(), which reprograms the
-transmitter and leaves video muted.
+hdmi_notification_handler() calls sceHdmiOutputMode(), which disturbs the
+transmitter's video path and leaves the output muted.
 
 DRM is never told. There is no connector event and no atomic commit, so
 amdgpu_dm_atomic_commit_tail() does not run and nothing calls
@@ -20,19 +20,37 @@ This is the "screen save does not work properly" entry in the
 ps5-linux-patches README: the console appears to have blanked and cannot be
 woken from the couch, but it is not a screensaver or a DPMS state at all.
 
-Restore the output from the handler instead, replaying the configuration
-amdgpu last programmed. This touches only the transmitter -- no modeset, no
-DRM involvement, no dependency on a compositor being alive -- so it works in
-Steam Game Mode (gamescope, which has no D-Bus API to force a modeset) and at
-the display-manager greeter alike.
+Restore the output from the handler instead, replaying what amdgpu last
+programmed. This touches only the transmitter -- no modeset, no DRM
+involvement, no dependency on a compositor being alive -- so it works in Steam
+Game Mode (gamescope, which has no D-Bus API to force a modeset) and at the
+display-manager greeter alike.
 
-Because there is no readback, it cannot be determined statically whether an
-unmute alone suffices or whether the video timing must be reprogrammed too.
-The behaviour is therefore selectable at runtime via hdmi.restore_output:
+amdgpu_dm_atomic_commit_tail() brings the transmitter up in two halves, either
+side of committing the streams. First it mutes and calls
+sceHdmiInitVideoConfig(); afterwards it programs the mode, unmutes, and sets
+audio up. Replaying only the second half is not enough. It does rebuild the
+HDMI output PHY, since setHdmiVideoConfigFlava3() covers link training and both
+PHY init steps, but nothing then restores what sceHdmiInitVideoConfig() owns:
+the encode teardown handshake in sceDisableEncode(), the ISR registers, and
+initDpForFlava3(), which sets up the DP *receiver* facing the GPU.
+sceHdmiOutputMode() disturbs exactly those. After a second-half-only restore
+the chip drives sync and plays audio -- a separate path with its own mute --
+while passing no video, which presents identically to no restore at all.
+
+Replay both halves. The GPU streams throughout and is unaware any of this
+happened, so the re-init retrains against a live signal rather than a dark
+link.
+
+Because none of this reads back, it cannot be determined statically how much of
+the sequence is really required, and the useful amount has already been
+mis-estimated once. The behaviour is therefore selectable at runtime via
+hdmi.restore_output:
 
   0 - do nothing (pre-fix behaviour)
   1 - unmute only (cheapest; does not retrain the internal DP link)
-  2 - replay the full video+audio config amdgpu last programmed (default)
+  2 - replay the video+audio config amdgpu last programmed
+  3 - re-init the transmitter first, then replay it (default)
 
 Also serialise the exported transmitter entry points. They all build their ICC
 message in the single global i2c_ctx with no locking; an EDID notification
@@ -46,17 +64,24 @@ that pointer without any synchronisation against this path -- the leak is the
 safer of the two bugs and wants a separate fix.
 
 Tested on a PS5 (Oberon) running kernel 7.1.3 with a 4K TV over the internal
-DP -> FLAVA3 path, across several days of ordinary use. Before the patch, the
-blackout reproduced by powering the TV off and on, or by switching it to
-another input and back; after it, the same actions restore the picture within
-about a second and the handler logs:
+DP -> FLAVA3 path. Powering the TV off and on, or switching it to another input
+and back, reproduces the blackout with restore_output=0 and restores the
+picture within about a second at the default, logging:
 
   hdmi: got real edid
-  hdmi: restored hdmi output (3840x2160, 8 ch)
+  hdmi: restored hdmi output (3840x2160, 8 ch, restore_output=3)
 
 Early in boot, before amdgpu has committed a mode, there is nothing cached to
 replay and the handler falls back to unmuting alone, logging "(unmute only, no
 mode cached)".
+
+History worth recording, since it is the reason mode 3 exists: mode 2 was the
+original default and appeared to work for days under GNOME. It was not the
+thing fixing the screen. Mutter reacts to the connector event with a genuine
+atomic modeset, which runs the whole sequence through amdgpu and would have
+recovered the picture with no patch at all. Under gamescope, which does not
+remodeset on hotplug, mode 2 was left on its own and the blackout came back --
+with audio, which is what pointed at the missing half.
 
 --- a/drivers/ps5/hdmi.c
 +++ b/drivers/ps5/hdmi.c
@@ -71,7 +96,7 @@ mode cached)".
  
  #define HDMI_IC_TYPE_FLAVA3	2
  #define HDMI_IC_TYPE_VERDE	3
-@@ -102,6 +104,38 @@
+@@ -102,6 +104,40 @@
  
  static struct i2c_context i2c_ctx;
  
@@ -100,17 +125,19 @@ mode cached)".
 + * notification:
 + *   0 - do nothing (pre-fix behaviour: the screen stays black)
 + *   1 - unmute only (cheapest, does not retrain the internal DP link)
-+ *   2 - replay the full video+audio config amdgpu last programmed
++ *   2 - replay the video+audio config amdgpu last programmed
++ *   3 - additionally re-init the transmitter first, i.e. replay the whole
++ *       sequence amdgpu runs across a modeset (default)
 + */
-+static int restore_output = 2;
++static int restore_output = 3;
 +module_param(restore_output, int, 0644);
 +MODULE_PARM_DESC(restore_output,
-+	"Restore HDMI output after an EDID notification: 0=off, 1=unmute only, 2=full replay (default 2)");
++	"Restore HDMI output after an EDID notification: 0=off, 1=unmute only, 2=replay video+audio config, 3=re-init transmitter then replay (default 3)");
 +
  static u8 hdmi_ic_type;
  static u8 tmds_polarity;
  static u8 tmds_ch_swap;
-@@ -522,6 +556,7 @@
+@@ -522,6 +558,7 @@
  
  void hdmiSystemResume(void)
  {
@@ -118,7 +145,7 @@ mode cached)".
  	// sceSetBackToUnpluggedSequence();
  	// sceSetBackToWaitResolutionSequence();
  	if (hdmi_ic_type == HDMI_IC_TYPE_FLAVA3) {
-@@ -537,6 +572,7 @@
+@@ -537,6 +574,7 @@
  		unk_akv();
  	}
  	sceControlHdmiEvent(1);
@@ -126,7 +153,7 @@ mode cached)".
  }
  EXPORT_SYMBOL(hdmiSystemResume);
  
-@@ -1093,6 +1129,7 @@
+@@ -1093,6 +1131,7 @@
  
  void sceHdmiInitVideoConfig(void)
  {
@@ -134,7 +161,7 @@ mode cached)".
  	stopHdcpHw();
  	if (hdmi_ic_type == HDMI_IC_TYPE_FLAVA3) {
  		sceDisableEncode();
-@@ -1102,21 +1139,27 @@
+@@ -1102,21 +1141,27 @@
  	} else {
  		initVerde();
  	}
@@ -162,7 +189,7 @@ mode cached)".
  	i2c_init(4);
  	if (hdmi_ic_type == HDMI_IC_TYPE_FLAVA3) {
  		i2c_write(0x705f, (mute == 1) << 7);
-@@ -1124,21 +1167,26 @@
+@@ -1124,21 +1169,26 @@
  		i2c_mask(0x105, mute != 1, 0x03);
  	}
  	i2c_exec();
@@ -189,7 +216,7 @@ mode cached)".
  	i2c_init(4);
  	if (hdmi_ic_type == HDMI_IC_TYPE_FLAVA3) {
  		i2c_mask(0x70a8, (mute == 1) << 2, 0x04);
-@@ -1146,16 +1194,19 @@
+@@ -1146,16 +1196,19 @@
  		i2c_cmd_5_5(mute == 1);
  	}
  	i2c_exec();
@@ -209,7 +236,7 @@ mode cached)".
  }
  EXPORT_SYMBOL(sceHdmiOutputMode);
  
-@@ -1229,11 +1280,58 @@
+@@ -1229,11 +1282,84 @@
  
  void hdmi_notification_handler(struct icc_msg *msg)
  {
@@ -267,10 +294,36 @@ mode cached)".
 +		return;
 +	}
 +
++	/*
++	 * amdgpu_dm_atomic_commit_tail() brings the transmitter up in two
++	 * halves, either side of committing the streams: it mutes and calls
++	 * sceHdmiInitVideoConfig(), then programs the mode and unmutes.
++	 *
++	 * Mode 2 replays only the second half. That rebuilds the HDMI output
++	 * PHY -- setHdmiVideoConfigFlava3() does link training and both PHY
++	 * init steps -- but nothing restores the state sceHdmiInitVideoConfig()
++	 * owns: the encode teardown handshake in sceDisableEncode(), the ISR
++	 * registers, and initDpForFlava3(), which sets up the *DP receiver*
++	 * facing the GPU. sceHdmiOutputMode() disturbs those, so after a mode-2
++	 * restore the chip drives sync and plays audio (a separate path, with
++	 * its own mute) while passing no video: the TV reports a live signal
++	 * and shows black, exactly as it does with no restore at all.
++	 *
++	 * Mode 3 replays both halves. The GPU is streaming throughout -- we
++	 * never stop it, and it is unaware any of this happened -- so the
++	 * re-init retrains against a live signal rather than a dark link.
++	 */
++	if (restore_output >= 3) {
++		sceHdmiSetAudioMute(1);
++		sceHdmiDeviceSetVideoMute(1);
++		sceHdmiInitVideoConfig();
++	}
++
 +	sceHdmiSetVideoConfig(&mode);
 +	sceHdmiDeviceSetVideoMute(0);
 +	sceHdmiSetAudioConfig(channels);
 +	sceHdmiSetAudioMute(0);
-+	pr_info("restored hdmi output (%s, %d ch)\n", mode.name, channels);
++	pr_info("restored hdmi output (%s, %d ch, restore_output=%d)\n",
++		mode.name, channels, restore_output);
  }
  EXPORT_SYMBOL(hdmi_notification_handler);
